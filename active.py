@@ -76,10 +76,17 @@ screenshot_dir.mkdir(parents=True, exist_ok=True)
 c = 0
 filepath = screenshot_dir / f"screen_{c}.png"
 
+mouse_position = None
 # mouse_position = take_screenshot(filepath)
 from omegaconf import OmegaConf
 
-mouse_position = OmegaConf.create({"x": 1436, "y": 772})
+if not mouse_position:
+    mouse_position = OmegaConf.create({"x": 1409, "y": 740})
+else:
+    mouse_position = OmegaConf.create({"x": mouse_position.x, "y": mouse_position.y})
+
+mouse_position.x = mouse_position.x * 2
+mouse_position.y = mouse_position.y * 2
 
 from PIL import Image
 import pytesseract
@@ -187,26 +194,25 @@ def scharr_sorted(filepath):
     thresh = cv2.adaptiveThreshold(
         scharr_combined, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 10
     )
-    # kernel = np.ones((5, 5), np.uint8)
-    # thresh = cv2.dilate(thresh, kernel, iterations=1)
-
     cv2.imwrite("data/thresd.png", thresh)
 
     # Find contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     height, width = img.shape
+    min_size = 500000
+    print(f"{min_size/(height*width)*100:.3f}% of image size")
     black_image = np.zeros((height, width, 3), np.uint8)
 
     # Draw bounding boxes in white
     for contour in contours:
-        if cv2.contourArea(contour) > 72000:
+        if cv2.contourArea(contour) > min_size:
             x, y, w, h = cv2.boundingRect(contour)
             cv2.rectangle(black_image, (x, y), (x + w, y + h), (255, 255, 255), 2)
     cv2.imwrite("data/all_bounding_boxes.png", black_image)
 
     # alternative
-    contours = [c for c in contours if cv2.contourArea(c) > 72000]
+    contours = [c for c in contours if cv2.contourArea(c) > min_size]
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
     # Assume the foreground window is the largest contour near the center
