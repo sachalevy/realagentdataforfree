@@ -1,9 +1,16 @@
 import AppKit
-import Quartz.CoreGraphics as CG
-from Cocoa import NSURL, NSDictionary
-import LaunchServices
 from pathlib import Path
 import time
+
+import cv2
+
+from PIL import Image
+import pytesseract
+import subprocess
+import os
+
+import pyautogui
+import numpy as np
 
 
 def get_active_app_name():
@@ -12,41 +19,20 @@ def get_active_app_name():
 
     # Get the frontmost (active) application
     active_app = workspace.frontmostApplication()
+    metadata = {
+        "name": active_app.localizedName(),
+        "bundle_identifier": active_app.bundleIdentifier(),
+        "process_identifier": active_app.processIdentifier(),
+        "executable_url": str(active_app.executableURL()),
+        "launch_date": str(active_app.launchDate()),
+        "is_hidden": active_app.isHidden(),
+        "is_terminated": active_app.isTerminated(),
+    }
 
-    # Get the application name
-    active_app_name = active_app.localizedName()
-
-    return active_app_name
+    return metadata
 
 
 print("Current active application:", get_active_app_name())
-
-
-def capture_screen(file_path):
-    # Create a region of interest (in this case, the entire screen)
-    region = CG.CGRectInfinite
-
-    # Capture the screen
-    image = CG.CGWindowListCreateImage(
-        region,
-        CG.kCGWindowListOptionOnScreenOnly,
-        CG.kCGNullWindowID,
-        CG.kCGWindowImageDefault,
-    )
-
-    # Create a destination to write the image
-    url = NSURL.fileURLWithPath_(file_path)
-    dest = CG.CGImageDestinationCreateWithURL(url, LaunchServices.kUTTypePNG, 1, None)
-
-    # Add the image to the destination and finalize it
-    CG.CGImageDestinationAddImage(dest, image, None)
-    CG.CGImageDestinationFinalize(dest)
-
-
-import subprocess
-import os
-
-import pyautogui
 
 
 def get_mouse_position():
@@ -77,104 +63,27 @@ c = 0
 filepath = screenshot_dir / f"screen_{c}.png"
 
 mouse_position = None
-# mouse_position = take_screenshot(filepath)
+mouse_position = take_screenshot(filepath)
 from omegaconf import OmegaConf
 
 if not mouse_position:
-    mouse_position = OmegaConf.create({"x": 1409, "y": 740})
+    mouse_position = OmegaConf.create({"x": 493, "y": 576})
 else:
     mouse_position = OmegaConf.create({"x": mouse_position.x, "y": mouse_position.y})
-
+print(mouse_position)
 mouse_position.x = mouse_position.x * 2
 mouse_position.y = mouse_position.y * 2
-
-from PIL import Image
-import pytesseract
 
 
 def extract_text_from_image(image_path):
     try:
         img = Image.open(image_path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         text = pytesseract.image_to_string(img)
         return text
     except Exception as e:
         print(f"An error occurred while extracting text from the image: {e}")
         return None
-
-
-# text = extract_text_from_image(filepath)
-# print(text)
-
-import io
-import requests
-import torch
-import numpy
-
-from transformers import DetrImageProcessor, DetrForObjectDetection
-
-
-def try_segmenting_image(filepath):
-    image = Image.open(filepath)
-    processor = DetrImageProcessor.from_pretrained(
-        "facebook/detr-resnet-101", revision="no_timm"
-    )
-    model = DetrForObjectDetection.from_pretrained(
-        "facebook/detr-resnet-101", revision="no_timm"
-    )
-
-    inputs = processor(images=image, return_tensors="pt")
-    outputs = model(**inputs)
-
-    # convert outputs (bounding boxes and class logits) to COCO API
-    # let's only keep detections with score > 0.9
-    target_sizes = torch.tensor([image.size[::-1]])
-    results = processor.post_process_object_detection(
-        outputs, target_sizes=target_sizes, threshold=0.9
-    )[0]
-
-    for score, label, box in zip(
-        results["scores"], results["labels"], results["boxes"]
-    ):
-        box = [round(i, 2) for i in box.tolist()]
-        print(
-            f"Detected {model.config.id2label[label.item()]} with confidence "
-            f"{round(score.item(), 3)} at location {box}"
-        )
-
-
-import cv2
-
-import numpy as np
-
-
-def scharr(filepath):
-    img = cv2.imread(filepath, 0)
-    scharrx = cv2.Scharr(img, cv2.CV_64F, 1, 0)
-    scharry = cv2.Scharr(img, cv2.CV_64F, 0, 1)
-
-    # Combine the horizontal and vertical edges
-    scharr_combined = cv2.magnitude(scharrx, scharry)
-    scharr_combined = cv2.convertScaleAbs(scharr_combined)
-
-    # find bounding boxes
-    _, thresh = cv2.threshold(scharr_combined, 50, 255, cv2.THRESH_BINARY)
-
-    # Find contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-
-    height, width = img.shape
-    black_image = np.zeros((height, width, 3), np.uint8)
-
-    # Draw bounding boxes in white
-    for contour in contours:
-        if cv2.contourArea(contour) > 36000:
-            x, y, w, h = cv2.boundingRect(contour)
-            cv2.rectangle(black_image, (x, y), (x + w, y + h), (255, 255, 255), 2)
-
-    return scharr_combined, black_image
-
-
-print(mouse_position)
 
 
 def scharr_sorted(filepath):
@@ -185,11 +94,6 @@ def scharr_sorted(filepath):
     # Combine the horizontal and vertical edges
     scharr_combined = cv2.magnitude(scharrx, scharry)
     scharr_combined = cv2.convertScaleAbs(scharr_combined)
-
-    # Apply dilation to close gaps
-    # _, thresh = cv2.threshold(scharr_combined, 50, 255, cv2.THRESH_BINARY)
-    # kernel = np.ones((5, 5), np.uint8)
-    # thresh = cv2.dilate(thresh, kernel, iterations=1)
 
     thresh = cv2.adaptiveThreshold(
         scharr_combined, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 10
@@ -256,48 +160,71 @@ def scharr_sorted(filepath):
         2,
     )
 
-    return scharr_combined, black_image
+    return scharr_combined, black_image, foreground_contour
 
 
-def sobel(filepath):
-    # Read the image
-    img = cv2.imread(filepath, 0)  # 0 means load in grayscale
-    # 1. equalizer + canny
-    # equalized_img = cv2.equalizeHist(img)
-    # edges = cv2.Canny(equalized_img, 100, 200)
+def extract_text_from_region(image_path, contour):
+    # Load the image
+    img = cv2.imread(image_path)
 
-    # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    # edges = clahe.apply(img)
+    # Crop the image using the bounding box coordinates
+    x, y, w, h = cv2.boundingRect(contour)
+    cropped_img = img[y : y + h, x : x + w]
 
-    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=5)
-    sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=5)
+    # Convert the cropped image to a PIL Image for Tesseract
+    pil_img = Image.fromarray(cropped_img)
 
-    # Combine both directions
-    edges = cv2.magnitude(sobelx, sobely)
-
-    # grad_x = cv2.Sobel(img, cv2.CV_64F, 1, 0)
-    # grad_y = cv2.Sobel(img, cv2.CV_64F, 0, 1)
-
-    # Compute magnitude
-    # edges = np.sqrt(grad_x**2 + grad_y**2)
-
-    # kernel = np.ones((5, 5), np.uint8)
-
-    # Apply dilation and erosion
-    # dilation = cv2.dilate(img, kernel, iterations=1)
-    # erosion = cv2.erode(img, kernel, iterations=1)
-
-    # Combine dilation and erosion
-    # edges = cv2.bitwise_or(dilation, erosion)
-
-    return edges
+    # Extract text using Tesseract
+    text = pytesseract.image_to_string(pil_img)
+    return text
 
 
-edges, img = scharr_sorted(str(filepath))
+edges, img, contour = scharr_sorted(str(filepath))
 # Save or display the edge detection result
 cv2.imwrite(os.path.expanduser("data/edges_schaar.png"), edges)
 cv2.imwrite("data/bounding_boxes.png", img)
-# edges = sobel(str(filepath))
-# cv2.imwrite(os.path.expanduser("data/edges_sobel.png"), edges)
+
+text = extract_text_from_region(str(filepath), contour)
+# print(text)
+import re
+
+
+def remove_non_printable_chars(text):
+    return re.sub(r"[^\x20-\x7E]", "", text)
+
+
+def correct_common_ocr_errors(text):
+    corrections = {
+        "0": "O",  # Zero to letter O
+        "1": "I",  # One to letter I
+        "|": "I"
+        # Add more based on common errors observed in your OCR output
+    }
+    return "".join(corrections.get(c, c) for c in text)
+
+
+def remove_extra_whitespaces(text):
+    text = text.strip()
+    return re.sub(r"\s+", " ", text)
+
+
+def format_paragraphs(text):
+    # Replace breaks with a single newline, etc.
+    return text.replace("\n\n", "\n")
+
+
+def clean_ocr_text(text):
+    text = remove_non_printable_chars(text)
+    text = correct_common_ocr_errors(text)
+    text = remove_extra_whitespaces(text)
+    text = format_paragraphs(text)
+    return text
+
+
+# Example usage
+print(text)
+cleaned_text = clean_ocr_text(text)
+print(cleaned_text)
+
 
 print("Edge detection result saved.")
