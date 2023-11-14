@@ -1,8 +1,9 @@
 import time
 import subprocess
-import threading
-
 from pathlib import Path
+
+import AppKit
+import pyautogui
 from pynput import keyboard, mouse
 
 
@@ -44,15 +45,30 @@ click_fp = open(data_dir / "clicks.txt", "a")
 DELTA = 3
 
 
+def get_active_app_name():
+    workspace = AppKit.NSWorkspace.sharedWorkspace()
+    return workspace.frontmostApplication().localizedName()
+
+
+def get_mouse_position():
+    return pyautogui.position()
+
+
 def on_click(x, y, button, pressed):
     global last
-    click_fp.write(f"{x},{y},{button},{pressed},{time.time()}\n")
+
+    click_fp.write(
+        f"{x},{y},{button},{pressed},{time.time()},{get_active_app_name()}\n"
+    )
     click_fp.flush()
 
     curr = time.time()
     if not pressed and curr - last > DELTA:
-        c = int(time.time())  # Using the current timestamp as a unique identifier
-        filepath = screenshot_dir / f"screen_{c}.png"
+        c = int(time.time())
+        mouse_position = get_mouse_position()
+        filepath = (
+            screenshot_dir / f"screen_{c}_{mouse_position.x}_{mouse_position.y}.png"
+        )
         take_screenshot(filepath)
         last = curr
 
@@ -71,14 +87,12 @@ def on_move(x, y):
     move_fp.write(f"{x},{y},{time.time()}\n")
 
 
-# Set up as a listener that calls the appropriate function
 keyboard_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-mouse_listener = mouse.Listener(on_click=on_click, on_scroll=on_scroll, on_move=on_move)
+mouse_listener = mouse.Listener(on_click=on_click, on_scroll=on_scroll)
 
-# Start the listener threads
 keyboard_listener.start()
-time.sleep(1)  # wait for the keyboard listener to start
+time.sleep(1)
 mouse_listener.start()
 
-keyboard_listener.join()  # remove if you want non-blocking
-mouse_listener.join()  # remove if you want non-blocking
+keyboard_listener.join()
+mouse_listener.join()

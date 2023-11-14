@@ -14,10 +14,8 @@ import numpy as np
 
 
 def get_active_app_name():
-    # Get the shared workspace
     workspace = AppKit.NSWorkspace.sharedWorkspace()
 
-    # Get the frontmost (active) application
     active_app = workspace.frontmostApplication()
     metadata = {
         "name": active_app.localizedName(),
@@ -70,7 +68,7 @@ if not mouse_position:
     mouse_position = OmegaConf.create({"x": 493, "y": 576})
 else:
     mouse_position = OmegaConf.create({"x": mouse_position.x, "y": mouse_position.y})
-print(mouse_position)
+
 mouse_position.x = mouse_position.x * 2
 mouse_position.y = mouse_position.y * 2
 
