@@ -1,14 +1,13 @@
 import AppKit
 from pathlib import Path
 import time
-
-import cv2
-
-from PIL import Image
-import pytesseract
+import re
 import subprocess
 import os
 
+import cv2
+from PIL import Image
+import pytesseract
 import pyautogui
 import numpy as np
 
@@ -162,17 +161,12 @@ def scharr_sorted(filepath):
 
 
 def extract_text_from_region(image_path, contour):
-    # Load the image
     img = cv2.imread(image_path)
 
-    # Crop the image using the bounding box coordinates
     x, y, w, h = cv2.boundingRect(contour)
     cropped_img = img[y : y + h, x : x + w]
 
-    # Convert the cropped image to a PIL Image for Tesseract
     pil_img = Image.fromarray(cropped_img)
-
-    # Extract text using Tesseract
     text = pytesseract.image_to_string(pil_img)
     return text
 
@@ -183,8 +177,6 @@ cv2.imwrite(os.path.expanduser("data/edges_schaar.png"), edges)
 cv2.imwrite("data/bounding_boxes.png", img)
 
 text = extract_text_from_region(str(filepath), contour)
-# print(text)
-import re
 
 
 def remove_non_printable_chars(text):
@@ -207,7 +199,6 @@ def remove_extra_whitespaces(text):
 
 
 def format_paragraphs(text):
-    # Replace breaks with a single newline, etc.
     return text.replace("\n\n", "\n")
 
 
@@ -219,7 +210,6 @@ def clean_ocr_text(text):
     return text
 
 
-# Example usage
 print(text)
 cleaned_text = clean_ocr_text(text)
 print(cleaned_text)

@@ -13,6 +13,11 @@ from dotenv import load_dotenv
 load_dotenv(".env")
 
 
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+}
+
 SYSTEM_PROMPT = """You are a helpful assistant and expert in APIs.
 Your task is to represent the action being performed by a computer user from a screenshot into a goal-oriented API call.
 For example if a user is navigating to a weather website, you should return an API call representing the action of getting the weather.
@@ -55,10 +60,6 @@ def get_api_signature_from_vision(
     text_context: str,
     active_app: str,
 ):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-    }
     image_payload = {
         "type": "image_url",
         "image_url": {"url": f"data:image/jpeg;base64,{encode_image(filepath)}"},
@@ -147,10 +148,6 @@ def get_api_signature_from_text(
     text_context: str,
     active_app: str,
 ):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-    }
     payload = {
         "model": "gpt-3.5-turbo-1106",
         "response_format": {"type": "json_object"},
@@ -204,10 +201,6 @@ The goal is to contextualize the current task within the user's workflow.
 
 
 def get_user_action_description(sentences, text_context, active_app):
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-    }
     payload = {
         "model": "gpt-3.5-turbo-1106",
         "messages": [
@@ -230,12 +223,16 @@ def get_user_action_description(sentences, text_context, active_app):
         ],
         "max_tokens": 512,
     }
-    response = requests.post(
-        "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
-    )
-    return response.json(), response.json().get("choices")[0].get("message").get(
-        "content"
-    )
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
+        )
+        loaded_resp, content = response.json(), response.json().get("choices")[0].get(
+            "message"
+        ).get("content")
+        return loaded_resp, content
+    except Exception as e:
+        return {}, None
 
 
 def mock_get_api_signature(filepath):
@@ -341,6 +338,159 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
+SAMPLE_PROMPT = "SYSTEM: You are an helpful assistant who has access to the following functions to help the user, you can use the functions if needed- {api_signature}\
+    USER: {inferred_user_prompt}\
+    ASSISTANT: <functioncall> {inferred_function_arguments} FUNCTION RESPONSE: {inferred_function_response}\
+    ASSISTANT: {assistant_response}"
+
+
+def format_sample(
+    api_signature,
+    inferred_user_prompt,
+    inferred_function_arguments,
+    inferred_function_response,
+    inferred_assistant_response,
+):
+    return SAMPLE_PROMPT.format(
+        api_signature=api_signature,
+        inferred_user_prompt=inferred_user_prompt,
+        inferred_function_arguments=inferred_function_arguments,
+        inferred_function_response=inferred_function_response,
+        assistant_response=inferred_assistant_response,
+    )
+
+
+SAMPLE_MD_PROMPT = "SYSTEM: You are an helpful assistant who has access to the following functions to help the user, you can use the functions if needed- ```json\n{api_signature}\n```\
+    \nUSER: {inferred_user_prompt}\
+    \nASSISTANT: <functioncall> \n```json\n{inferred_function_arguments}\n```\n\
+    \nFUNCTION RESPONSE: \n```json\n{inferred_function_response}\n```\n\
+    \nASSISTANT: {assistant_response}"
+
+
+def format_sample_md(
+    api_signature,
+    inferred_user_prompt,
+    inferred_function_arguments,
+    inferred_function_response,
+    inferred_assistant_response,
+):
+    return SAMPLE_MD_PROMPT.format(
+        api_signature=api_signature,
+        inferred_user_prompt=inferred_user_prompt,
+        inferred_function_arguments=inferred_function_arguments,
+        inferred_function_response=inferred_function_response,
+        assistant_response=inferred_assistant_response,
+    )
+
+
+INFER_ARGS_SYSTEM_PROMPT = """
+You are a helpful assistant and expert in APIs. You are to help \
+    in formatting the intent of a user's action into a textual conversation centered around \
+    the usage of an API tool. You are given text extracted from a screenshot of a user's \
+    computer screen as well as the name of the active app on the user's computer. Recent keystrokes \
+    of the user are also provided. In addition, you are provided with the API signature representing \
+    the current action of the user, as well as a description of their action.
+
+Expect an input formatted as:
+``
+ACTION_DESCRIPTION:```{action_description}```
+USER_INPUT:```{user_input}```
+WINDOW_CONTEXT:```{window_context}```
+ACTIVE_APP:```{active_app}```
+API_SIGNATURE:```{api_signature}```
+``
+
+Your task is to use these parameter to infer the {{user_prompt}}, {{function_arguments}}, \
+    {{function_response}}, and {{assistant_response}} arguments in the following template:
+``
+SYSTEM: You are an helpful assistant who has access to the following functions to help the user, you can use the functions if needed- {{api_signature}}
+USER: {{user_prompt}}
+ASSISTANT: <functioncall> {{function_arguments}} FUNCTION RESPONSE: {{function_response}}
+ASSISTANT: {{assistant_response}}
+``
+
+Make sure your response is formatted as a JSON object with the following keys:
+```
+{
+    "user_prompt": "The prompt/question the user is asking when completing this action.",
+    "function_arguments": "The arguments to required to call the specific function.",
+    "function_response": "The response returned by the function call (ie result of the user's action).",
+    "assistant_response": "The outcome of the user action, phrased as if the assistant is responding to the user."
+}
+```
+"""
+
+INFER_ARGS_USER_PROMPT = """
+Specify the values for the following keys:
+``
+{{
+    "user_prompt": "The prompt/question the user is asking when completing their action (eg if writing code this would be `implement function X`).",
+    "function_arguments": "The arguments required to call the specific function (eg if searching information online about someone, their name would be required).",
+    "function_response": "The response returned by the function call (ie result of the user's action).",
+    "assistant_response": "The outcome of the user action, phrased as if the assistant is responding to the user."
+}}
+``
+
+Use the following parameters to infer the values for the keys:
+``
+ACTION_DESCRIPTION:```{action_description}```
+USER_INPUT:```{user_input}```
+WINDOW_CONTEXT:```{window_context}```
+ACTIVE_APP:```{active_app}```
+API_SIGNATURE:```{api_signature}```
+``
+
+Make sure to format your answer as a JSON object.
+"""
+
+
+def infer_args(action_description, sentences, text_context, active_app, api_signature):
+    formatted_prompt = INFER_ARGS_USER_PROMPT.format(
+        action_description=action_description,
+        user_input=" ".join(sentences),
+        window_context=text_context,
+        active_app=active_app,
+        api_signature=api_signature,
+    )
+    payload = {
+        "model": "gpt-3.5-turbo-1106",
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": INFER_ARGS_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": formatted_prompt},
+                ],
+            },
+        ],
+        "max_tokens": 512,
+    }
+
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
+        )
+    except Exception as e:
+        return {}, None
+
+    print("inferred", response.json())
+
+    try:
+        loaded_resp = response.json()
+    except Exception as e:
+        return {}, None
+
+    to_json = lambda x: json.loads(x) if isinstance(x, str) else x
+    try:
+        content = response.json().get("choices")[0].get("message").get("content")
+        print(content, type(content))
+        content = to_json(content)
+        return loaded_resp, content
+    except Exception as e:
+        return loaded_resp, None
+
+
 def main(use_vision=False):
     unique_screenshot_dir = Path(
         "/Users/sachalevy/IMPLEMENT/datamakr/data/unique_screenshots"
@@ -355,9 +505,12 @@ def main(use_vision=False):
     scrolls_filepath = Path("/Users/sachalevy/IMPLEMENT/datamakr/data/scrolls.txt")
     clicks_filepath = Path("/Users/sachalevy/IMPLEMENT/datamakr/data/clicks.txt")
 
+    realtime_output = Path("/Users/sachalevy/IMPLEMENT/datamakr/data/realtime.md")
+    realtime_fd = open(realtime_output, "a")
+
     # iterate through all files
-    examples, examples_metadata = [], []
-    for i in range(0, 10):
+    examples, samples = [], []
+    for i in range(3, 10):
         screenshot_filename = screenshot_filenames[i]
         start_ts, end_ts = screenshot_timestamps[i], screenshot_timestamps[i + 1]
         print(
@@ -395,9 +548,7 @@ def main(use_vision=False):
                 sentences,
                 text_context,
                 active_app,
-            )  # mock_get_api_signature(
-            #    screenshot_filepath
-            # )
+            )
         else:
             full_vision_response, api_signature = get_api_signature_from_text(
                 action_description,
@@ -407,6 +558,34 @@ def main(use_vision=False):
             )
         print(json.dumps(full_vision_response))
         print("api signature", api_signature)
+
+        arg_inference_response, inferred_args = infer_args(
+            action_description, sentences, text_context, active_app, api_signature
+        )
+        user_prompt = inferred_args.get("user_prompt")
+        function_arguments = inferred_args.get("function_arguments")
+        function_response = inferred_args.get("function_response")
+        assistant_response = inferred_args.get("assistant_response")
+
+        sample = format_sample(
+            api_signature,
+            user_prompt,
+            function_arguments,
+            function_response,
+            assistant_response,
+        )
+        samples.append(sample)
+
+        # print(sample)
+        #
+        # md_sample = format_sample_md(
+        #    api_signature,
+        #    user_prompt,
+        #    function_arguments,
+        #    function_response,
+        #    assistant_response,
+        # )
+        realtime_fd.write(sample + "\n")
 
         example = {
             "screenshot_filepath": str(screenshot_filepath),
@@ -429,7 +608,12 @@ def main(use_vision=False):
         }
         examples.append(example)
 
-    with open("data/examples.json", "w") as file:
+        # make an .md sample and add it live to a file
+
+        exit(0)
+
+    output_examples_filepath = Path("data/examples.json")
+    with open(output_examples_filepath, "w") as file:
         json.dump(examples, file)
 
 
