@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import json
 
+import openai
 import requests
 from dotenv import load_dotenv
 
@@ -9,20 +10,18 @@ import prompt, utils
 
 load_dotenv(".env")
 
-
+client = openai.OpenAI()
 headers = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
 }
 
 
-def get_api_signature_from_vision(
-    filepath: Path,
-    action_description: str,
-    sentences: str,
-    text_context: str,
-    active_app: str,
-):
+def get_api_signature_from_vision(filepath: Path, user_prompt: str):
+    """
+    Ask gpt-4v to generate an api signature describing the user's actions
+    based on the provided screenshot.
+    """
     image_payload = {
         "type": "image_url",
         "image_url": {"url": f"data:image/jpeg;base64,{utils.encode_image(filepath)}"},
@@ -37,16 +36,7 @@ def get_api_signature_from_vision(
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "text",
-                        "text": "Provide the corresponding JSON signature for the API endpoint representing the user's action.\
-                            \nACTION_DESCRIPTION:```{action_description}```\nUSER_INPUT:```{user_input}```\nWINDOW_CONTEXT:```{window_context}```\nACTIVE_APP:```{active_app}```".format(
-                            action_description=action_description,
-                            user_input=" ".join(sentences),
-                            window_context=text_context,
-                            active_app=active_app,
-                        ),
-                    },
+                    {"type": "text", "text": user_prompt},
                     image_payload,
                 ],
             },
@@ -58,150 +48,25 @@ def get_api_signature_from_vision(
         response = requests.post(
             "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
         )
+        return response.json(), response.json().get("choices")[0].get("message").get(
+            "content"
+        )
     except Exception as e:
         return {}, None
 
-    try:
-        loaded_resp = response.json()
-    except Exception as e:
-        return {}, None
 
-    try:
-        content = response.json().get("choices")[0].get("message").get("content")
-        return loaded_resp, content
-    except Exception as e:
-        return loaded_resp, None
-
-
-def get_api_signature_from_text(
-    action_description: str,
-    sentences: str,
-    text_context: str,
-    active_app: str,
+def get_completion(
+    system_prompt: str, user_prompt: str, model: str = "gpt-3.5-turbo-1106"
 ):
-    payload = {
-        "model": "gpt-3.5-turbo-1106",
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": prompt.SYSTEM_PROMPT_API_SIGNATURE_FROM_TEXT},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Provide the corresponding JSON signature for the API endpoint representing the user's action.\
-                            \nACTION_DESCRIPTION:```{action_description}```\nUSER_INPUT:```{user_input}```\nWINDOW_CONTEXT:```{window_context}```\nACTIVE_APP:```{active_app}```".format(
-                            action_description=action_description,
-                            user_input=" ".join(sentences),
-                            window_context=text_context,
-                            active_app=active_app,
-                        ),
-                    },
-                ],
-            },
+    completion = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": 512,
-    }
-
-    try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
-        )
-    except Exception as e:
-        return {}, None
-
-    try:
-        loaded_resp = response.json()
-    except Exception as e:
-        return {}, None
-
-    try:
-        content = response.json().get("choices")[0].get("message").get("content")
-        return loaded_resp, content
-    except Exception as e:
-        return loaded_resp, None
-
-
-def get_user_action_description(sentences, text_context, active_app):
-    payload = {
-        "model": "gpt-3.5-turbo-1106",
-        "messages": [
-            {"role": "system", "content": prompt.TEXT_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Describe the user's action based on content displayed on their screen.\
-                            The current active app on the user's computer is {active_app}.\
-                            \nDISPLAYED_TEXT:```{displayed_text}```\nUSER_INPUT:```{user_input}```".format(
-                            displayed_text=text_context,
-                            user_input=" ".join(sentences),
-                            active_app=active_app,
-                        ),
-                    },
-                ],
-            },
-        ],
-        "max_tokens": 512,
-    }
-    try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
-        )
-        loaded_resp, content = response.json(), response.json().get("choices")[0].get(
-            "message"
-        ).get("content")
-        return loaded_resp, content
-    except Exception as e:
-        return {}, None
-
-
-def infer_args(action_description, sentences, text_context, active_app, api_signature):
-    formatted_prompt = prompt.INFER_ARGS_USER_PROMPT.format(
-        action_description=action_description,
-        user_input=" ".join(sentences),
-        window_context=text_context,
-        active_app=active_app,
-        api_signature=api_signature,
     )
-    payload = {
-        "model": "gpt-3.5-turbo-1106",
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": prompt.INFER_ARGS_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": formatted_prompt},
-                ],
-            },
-        ],
-        "max_tokens": 512,
-    }
 
-    try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions", headers=headers, json=payload
-        )
-    except Exception as e:
-        return {}, None
-
-    print("inferred", response.json())
-
-    try:
-        loaded_resp = response.json()
-    except Exception as e:
-        return {}, None
-
-    to_json = lambda x: json.loads(x) if isinstance(x, str) else x
-    try:
-        content = response.json().get("choices")[0].get("message").get("content")
-        print(content, type(content))
-        content = to_json(content)
-        return loaded_resp, content
-    except Exception as e:
-        return loaded_resp, None
+    return completion, completion.choices[0].message.content
 
 
 def main(use_vision=False):
@@ -235,28 +100,43 @@ def main(use_vision=False):
         screenshot_filepath = unique_screenshot_dir / (screenshot_filename + ".png")
         text_context = utils.extract_image_text(screenshot_filepath)
 
-        full_text_response, action_description = get_user_action_description(
-            sentences, text_context, active_app
+        action_description_user_prompt = (
+            prompt.USER_PROMPT_ACTION_DESCRIPTION.format(
+                displayed_text=text_context,
+                user_input=" ".join(sentences),
+                active_app=active_app,
+            ),
+        )
+        raw_action_description_completion, action_description = get_completion(
+            prompt.SYSTEM_PROMPT_ACTION_DESCRIPTION, action_description_user_prompt
         )
 
+        api_signature_user_prompt = (
+            prompt.USER_PROMPT_API_SIGNATURE.format(
+                action_description=action_description,
+                user_input=" ".join(sentences),
+                window_context=text_context,
+                active_app=active_app,
+            ),
+        )
         if use_vision:
-            full_vision_response, api_signature = get_api_signature_from_vision(
-                screenshot_filepath,
-                action_description,
-                sentences,
-                text_context,
-                active_app,
+            raw_api_signature_completion, api_signature = get_api_signature_from_vision(
+                screenshot_filepath, api_signature_user_prompt
             )
         else:
-            full_vision_response, api_signature = get_api_signature_from_text(
-                action_description,
-                sentences,
-                text_context,
-                active_app,
+            raw_api_signature_completion, api_signature = get_completion(
+                prompt.SYSTEM_PROMPT_API_SIGNATURE_FROM_TEXT, api_signature_user_prompt
             )
 
-        _, inferred_args = infer_args(
-            action_description, sentences, text_context, active_app, api_signature
+        inferred_api_call_arguments_user_prompt = prompt.INFER_ARGS_USER_PROMPT.format(
+            action_description=action_description,
+            user_input=" ".join(sentences),
+            window_context=text_context,
+            active_app=active_app,
+            api_signature=api_signature,
+        )
+        raw_arg_completion, inferred_args = get_completion(
+            prompt.INFER_ARGS_SYSTEM_PROMPT, inferred_api_call_arguments_user_prompt
         )
 
         sample = prompt.SAMPLE_PROMPT.format(
@@ -281,8 +161,8 @@ def main(use_vision=False):
             else api_signature,
             "user_input": " ".join(sentences),
             "metadata": {
-                "full_text_response": full_text_response,
-                "full_vision_response": full_vision_response,
+                "raw_action_description_completion": raw_action_description_completion,
+                "raw_api_signature_completion": raw_api_signature_completion,
                 "keystrokes": keystrokes,
                 "scrolls": scrolls,
                 "clicks": clicks,

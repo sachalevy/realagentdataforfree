@@ -10,3 +10,4 @@ opencv
 requests
 python-dotenv
 pytesseract
+openai
