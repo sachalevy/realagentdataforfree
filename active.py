@@ -12,48 +12,6 @@ import pyautogui
 import numpy as np
 
 
-def get_active_app_name():
-    workspace = AppKit.NSWorkspace.sharedWorkspace()
-
-    active_app = workspace.frontmostApplication()
-    metadata = {
-        "name": active_app.localizedName(),
-        "bundle_identifier": active_app.bundleIdentifier(),
-        "process_identifier": active_app.processIdentifier(),
-        "executable_url": str(active_app.executableURL()),
-        "launch_date": str(active_app.launchDate()),
-        "is_hidden": active_app.isHidden(),
-        "is_terminated": active_app.isTerminated(),
-    }
-
-    return metadata
-
-
-print("Current active application:", get_active_app_name())
-
-
-def get_mouse_position():
-    return pyautogui.position()
-
-
-def take_screenshot(file_path):
-    """
-    Takes a screenshot and saves it to the specified file path.
-
-    Args:
-    file_path (str): The path where the screenshot will be saved.
-    """
-    time.sleep(3)
-    mouse_position = get_mouse_position()
-    try:
-        subprocess.run(["screencapture", file_path], check=True)
-        print(f"Screenshot saved to {file_path}")
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred while taking the screenshot: {e}")
-
-    return mouse_position
-
-
 screenshot_dir = Path("/Users/sachalevy/IMPLEMENT/datamakr/data/")
 screenshot_dir.mkdir(parents=True, exist_ok=True)
 c = 0
@@ -70,17 +28,6 @@ else:
 
 mouse_position.x = mouse_position.x * 2
 mouse_position.y = mouse_position.y * 2
-
-
-def extract_text_from_image(image_path):
-    try:
-        img = Image.open(image_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        text = pytesseract.image_to_string(img)
-        return text
-    except Exception as e:
-        print(f"An error occurred while extracting text from the image: {e}")
-        return None
 
 
 def scharr_sorted(filepath):
@@ -158,17 +105,6 @@ def scharr_sorted(filepath):
     )
 
     return scharr_combined, black_image, foreground_contour
-
-
-def extract_text_from_region(image_path, contour):
-    img = cv2.imread(image_path)
-
-    x, y, w, h = cv2.boundingRect(contour)
-    cropped_img = img[y : y + h, x : x + w]
-
-    pil_img = Image.fromarray(cropped_img)
-    text = pytesseract.image_to_string(pil_img)
-    return text
 
 
 edges, img, contour = scharr_sorted(str(filepath))

@@ -1,2 +1,12 @@
 pynput
 pyobjc
+omegaconf
+tqdm
+numpy
+pillow
+scikit-image
+pyautogui
+opencv
+requests
+python-dotenv
+pytesseract
