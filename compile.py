@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import json
+import argparse
 
 import openai
 import requests
@@ -56,15 +57,21 @@ def get_api_signature_from_vision(filepath: Path, user_prompt: str):
 
 
 def get_completion(
-    system_prompt: str, user_prompt: str, model: str = "gpt-3.5-turbo-1106"
+    system_prompt: str,
+    user_prompt: str,
+    model: str = "gpt-3.5-turbo-1106",
+    request_json: bool = False,
 ):
-    completion = client.chat.completions.create(
+    completion_kwargs = dict(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
     )
+    if request_json:
+        completion_kwargs["response_format"] = {"type": "json_object"}
+    completion = client.chat.completions.create(**completion_kwargs)
 
     return completion, completion.choices[0].message.content
 
@@ -90,34 +97,34 @@ def main(use_vision=False):
         screenshot_filename = screenshot_filenames[i]
         start_ts, end_ts = screenshot_timestamps[i], screenshot_timestamps[i + 1]
 
+        # get all events happening between start_ts and end_ts
         keystrokes = utils.retrieve_current_event(keystroke_filepath, start_ts, end_ts)
         scrolls = utils.retrieve_current_event(scrolls_filepath, start_ts, end_ts)
         clicks, active_app = utils.retrieve_current_event(
             clicks_filepath, start_ts, end_ts
         )
 
+        # extract user entries + on-screen text context
         sentences = utils.extract_sentences_from_keystrokes(keystrokes)
         screenshot_filepath = unique_screenshot_dir / (screenshot_filename + ".png")
-        text_context = utils.extract_image_text(screenshot_filepath)
-
-        action_description_user_prompt = (
-            prompt.USER_PROMPT_ACTION_DESCRIPTION.format(
-                displayed_text=text_context,
-                user_input=" ".join(sentences),
-                active_app=active_app,
-            ),
+        text_context = utils.extract_text_from_screenshot(screenshot_filepath)
+        action_description_user_prompt = prompt.USER_PROMPT_ACTION_DESCRIPTION.format(
+            displayed_text=text_context,
+            user_input=" ".join(sentences),
+            active_app=active_app,
         )
         raw_action_description_completion, action_description = get_completion(
-            prompt.SYSTEM_PROMPT_ACTION_DESCRIPTION, action_description_user_prompt
+            prompt.SYSTEM_PROMPT_ACTION_DESCRIPTION,
+            action_description_user_prompt,
+            request_json=True,
         )
+        print(action_description)
 
-        api_signature_user_prompt = (
-            prompt.USER_PROMPT_API_SIGNATURE.format(
-                action_description=action_description,
-                user_input=" ".join(sentences),
-                window_context=text_context,
-                active_app=active_app,
-            ),
+        api_signature_user_prompt = prompt.USER_PROMPT_API_SIGNATURE.format(
+            action_description=action_description,
+            user_input=" ".join(sentences),
+            window_context=text_context,
+            active_app=active_app,
         )
         if use_vision:
             raw_api_signature_completion, api_signature = get_api_signature_from_vision(
@@ -127,6 +134,7 @@ def main(use_vision=False):
             raw_api_signature_completion, api_signature = get_completion(
                 prompt.SYSTEM_PROMPT_API_SIGNATURE_FROM_TEXT, api_signature_user_prompt
             )
+        print(api_signature)
 
         inferred_api_call_arguments_user_prompt = prompt.INFER_ARGS_USER_PROMPT.format(
             action_description=action_description,
@@ -135,9 +143,11 @@ def main(use_vision=False):
             active_app=active_app,
             api_signature=api_signature,
         )
+        print(inferred_api_call_arguments_user_prompt)
         raw_arg_completion, inferred_args = get_completion(
             prompt.INFER_ARGS_SYSTEM_PROMPT, inferred_api_call_arguments_user_prompt
         )
+        print(inferred_args)
 
         sample = prompt.SAMPLE_PROMPT.format(
             api_signature=api_signature,
@@ -176,4 +186,10 @@ def main(use_vision=False):
 
 
 if __name__ == "__main__":
+    argparse = argparse.ArgumentParser()
+    argparse.add_argument(
+        "--use-vision",
+        action="store_true",
+        help="Use vision model to extract api signature",
+    )
     main()
