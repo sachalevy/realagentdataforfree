@@ -5,14 +5,14 @@
 
 ## Why?
 
-Think of the steps a data scientists goes through to answer a question about an ongoing training run:
-- receive a slack message (1)
-- navigate to wandb on their browser (2)
-- search for the training run in question (3)
-- extract the relevant information (4)
-- answer on slack (5)
+Think of the steps a data scientist goes through to answer a question about an ongoing training run:
+- receives a slack message (1)
+- navigates to wandb on their browser (2)
+- searches for the training run in question (3)
+- extracts the relevant information (4)
+- answers on slack (5)
 
-Inspired by OpenAI's function calls (for machines), we try to transcribe these workflows in an API-like format. For example for step 3:
+Inspired by OpenAI's function calls (for machines), we try to transcribe these workflows in an API-like format. For example step 3 could look like:
 ```markdown
 SYSTEM: You are a helpful assistant who has access to the following function to help the user, which you can use if needed -
 {
@@ -58,7 +58,7 @@ This format also was inspired by the [Glaive function calling dataset](https://h
 
 ## Quick Start
 
-This is made to run on macos and has only been tested on Monterey 12.3.1. Setup your python environment. Make sure you have an openai api key to use the `compile.py` module.
+This is made to run on macos and has only been tested on Monterey 12.3.1. Setup your python environment. Make sure you have an openai api key to use the `extract.py` module.
 
 ```bash
 python -m venv env
