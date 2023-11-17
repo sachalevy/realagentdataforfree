@@ -1,5 +1,7 @@
-# datamakr
-**Facilitate the extraction of high-quality agent training data** from humans performing tasks on their computers.
+# hci.arrow
+**Extract high-quality agent training data** from humans performing tasks on their computers.
+
+(i'm still working on the high-quality part)
 
 Think of the steps a data scientists goes through to answer a question about an ongoing training run:
 - receive a slack message (1)
@@ -75,11 +77,11 @@ All recorded data is put in a `data/` folder. No compression is applied on the p
 
 ## Extract Dataset
 
-Format the data into text with `compile.py`. This parses the recorded screenshots & user entries into activity time intervals, and extract all produced and consumed text within each interval. The openai api is then used to reproduce the user workflow formatted as API calls.
+Format the data into text with `extract.py`. This parses the recorded screenshots & user entries into activity time intervals, and extract all produced and consumed text within each interval. The openai api is then used to reproduce the user workflow formatted as API calls.
 
 Compile text samples from the recorded data by running:
 ```bash
-python compile.py
+python extract.py
 ```
 > Optionally, add the `--use-vision` flag to use the `gpt-4-vision-preview` model to extract the API signature directly from the screenshot instead of using extract text.
 

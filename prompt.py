@@ -80,8 +80,8 @@ The current active app on the user's computer is {active_app}.\
 \nDISPLAYED_TEXT:```{displayed_text}```\nUSER_INPUT:```{user_input}```"""
 
 SAMPLE_PROMPT = "SYSTEM: You are an helpful assistant who has access to the following functions to help the user, you can use the functions if needed- {api_signature}\
-    USER: {inferred_user_prompt}\
-    ASSISTANT: <functioncall> {inferred_function_arguments} FUNCTION RESPONSE: {inferred_function_response}\
+    USER: {user_prompt}\
+    ASSISTANT: <functioncall> {function_arguments} FUNCTION RESPONSE: {function_response}\
     ASSISTANT: {assistant_response}"
 
 INFER_ARGS_SYSTEM_PROMPT = """

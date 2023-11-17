@@ -3,6 +3,7 @@ from typing import List, Any, Tuple
 import subprocess
 import base64
 import re
+import shutil
 
 import cv2
 from tqdm import tqdm
@@ -86,12 +87,22 @@ def load_screenshots_from_folder(
     )
     imgs, filepaths = [], []
     for img_filepath in tqdm(sorted_img_filepaths):
-        img = cv2.imread(img_filepath, cv2.IMREAD_GRAYSCALE)
-        if img and downsample:
+        img = cv2.imread(str(img_filepath), cv2.IMREAD_GRAYSCALE)
+        if downsample:
             img = cv2.resize(img, size)
         imgs.append(img)
         filepaths.append(img_filepath)
     return imgs, filepaths
+
+
+def copy_imgs_to_target_dir(filepaths: List[Path], target_dir: Path):
+    """Copies images to a target directory."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for filepath in tqdm(filepaths):
+        shutil.copy(
+            filepath,
+            target_dir / f"{filepath.stem}{filepath.suffix}",
+        )
 
 
 def filter_unique_screenshots(

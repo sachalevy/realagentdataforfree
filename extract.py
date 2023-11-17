@@ -1,9 +1,11 @@
 from pathlib import Path
 import os
 import json
+from typing import List
 import argparse
 
 import openai
+import datasets
 import requests
 from dotenv import load_dotenv
 
@@ -76,9 +78,9 @@ def get_completion(
     return completion, completion.choices[0].message.content
 
 
-def main(use_vision=False):
-    unique_screenshot_dir = Path("data/unique_screenshots")
-    screenshot_filenames = [x.stem for x in unique_screenshot_dir.iterdir()]
+def main(screenshot_dir: Path, samples_filepath: Path, use_vision: bool = False):
+    assert screenshot_dir.exists(), "Screenshot directory does not exist."
+    screenshot_filenames = [x.stem for x in screenshot_dir.iterdir()]
     screenshot_filenames = sorted(
         screenshot_filenames, key=lambda x: int(x.split("_")[1])
     )
@@ -88,10 +90,9 @@ def main(use_vision=False):
     scrolls_filepath = Path("data/scrolls.txt")
     clicks_filepath = Path("data/clicks.txt")
 
-    output_complete_samples = Path("data/complete_samples.jsonl")
-    output_complete_samples_fd = open(output_complete_samples, "a")
-
-    for i in range(len(screenshot_filenames) - 1):
+    output_complete_samples_fd = open(samples_filepath, "a")
+    samples = []
+    for i in range(1):
         screenshot_filename = screenshot_filenames[i]
         start_ts, end_ts = screenshot_timestamps[i], screenshot_timestamps[i + 1]
 
@@ -104,7 +105,7 @@ def main(use_vision=False):
 
         # extract user entries + on-screen text context
         sentences = utils.extract_sentences_from_keystrokes(keystrokes)
-        screenshot_filepath = unique_screenshot_dir / (screenshot_filename + ".png")
+        screenshot_filepath = screenshot_dir / (screenshot_filename + ".png")
         text_context = utils.extract_text_from_screenshot(screenshot_filepath)
         action_description_user_prompt = prompt.USER_PROMPT_ACTION_DESCRIPTION.format(
             displayed_text=text_context,
@@ -145,7 +146,7 @@ def main(use_vision=False):
         )
         inferred_args = json.loads(inferred_args)
 
-        complete_sample = {
+        sample = {
             "screenshot_filepath": str(screenshot_filepath),
             "start_ts": start_ts,
             "end_ts": end_ts,
@@ -161,15 +162,70 @@ def main(use_vision=False):
             "scrolls": scrolls,
             "clicks": clicks,
         }
-        output_complete_samples_fd.write(json.dumps(complete_sample) + "\n")
+        output_complete_samples_fd.write(json.dumps(sample) + "\n")
+        samples.append(sample)
+
+    return samples
+
+
+def compile_arrow_dataset(samples: List[dict], output_dir: Path):
+    formatted_samples = []
+    for sample in samples:
+        formatted_sample = prompt.SAMPLE_PROMPT.format(
+            api_signature=sample["api_signature"],
+            user_prompt=sample["inferred_args"]["user_prompt"],
+            function_arguments=sample["inferred_args"]["function_arguments"],
+            function_response=sample["inferred_args"]["function_response"],
+            assistant_response=sample["inferred_args"]["assistant_response"],
+        )
+        formatted_samples.append(formatted_sample)
+
+    dataset = datasets.Dataset.from_dict({"input_ids": formatted_samples})
+    dataset.save_to_disk(output_dir)
+
+
+def make_unique(screenshot_dir: Path):
+    target_screenshot_dir = screenshot_dir.parent / (screenshot_dir.name + "_unique")
+    target_screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+    imgs, filepaths = utils.load_screenshots_from_folder(
+        screenshot_dir, downsample=True
+    )
+    _, unique_filepaths = utils.filter_unique_screenshots(imgs, filepaths)
+    utils.copy_imgs_to_target_dir(unique_filepaths, target_screenshot_dir)
 
 
 if __name__ == "__main__":
-    argparse = argparse.ArgumentParser()
-    argparse.add_argument(
-        "--use-vision",
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--use_vision",
         action="store_true",
         help="Use vision model to extract api signature",
     )
-    args = argparse.parse_args()
-    main(use_vision=args.use_vision)
+    parser.add_argument(
+        "--screenshot_dir", type=str, default="data/screenshots", help="Screenshot dir"
+    )
+    parser.add_argument(
+        "--skip_make_unique",
+        action="store_true",
+        help="Make unique screenshot dataset dataset before extracting data",
+    )
+    parser.add_argument("--output_dataset_dir", default="data/dataset", type=str)
+    parser.add_argument("--skip_arrow_dataset", action="store_true")
+    parser.add_argument("--samples_filepath", default="data/samples.jsonl", type=str)
+    args = parser.parse_args()
+
+    if not args.skip_make_unique:
+        print("Making unique screenshot dataset")
+        screenshot_dir = make_unique(Path(args.screenshot_dir))
+
+    print("Extracting data")
+    samples = main(
+        use_vision=args.use_vision,
+        screenshot_dir=Path(args.screenshot_dir),
+        samples_filepath=Path(args.samples_filepath),
+    )
+
+    if not args.skip_arrow_dataset:
+        print("Compiling arrow dataset")
+        compile_arrow_dataset(samples, Path(args.output_dataset_dir))
