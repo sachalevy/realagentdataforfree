@@ -43,14 +43,14 @@ def on_click(x, y, button, pressed):
     CLICK_FD.flush()
 
     curr = time.time()
-    if not pressed and curr - last > DELTA:
+    if not pressed and curr - LAST > DELTA:
         mouse_position = utils.get_mouse_position()
         filepath = (
             SCREENSHOT_DIR
             / f"screen_{int(time.time())}_{mouse_position.x}_{mouse_position.y}.png"
         )
         utils.take_screenshot(filepath)
-        last = curr
+        LAST = curr
 
 
 def on_scroll(x, y, dx, dy):

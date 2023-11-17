@@ -1,14 +1,13 @@
 # datamakr
 Compile human-computer interaction datasets & convert them to text.
 
-The goal is to facilitate the extraction of high-quality agent training data from humans performing tasks on their computers.
+The goal is to **facilitate the extraction of high-quality agent training data** from humans performing tasks on their computers.
 
-For example, think of the steps a data scientists goes through to answer a question about an ongoing training run. They receive a slack message (*1*), navigate to wandb on their browser (*2*), search for the training run in question (*3*), extract the relevant information (*4*), and answer their colleague on slack (*5*).
+For example, think of the steps a data scientists goes through to answer a question about an ongoing training run. They receive a slack message (1), navigate to wandb on their browser (2), search for the training run in question (3), extract the relevant information (4), and answer their colleague on slack (5).
 
 This can easily be described through text, given the necessary information (like screenshots and user activity recording). Inspired by OpenAI's function calls (for machines), we try to transcribe these workflows in an API-like format. For example for step 3:
 ```markdown
 SYSTEM: You are a helpful assistant who has access to the following function to help the user, which you can use if needed -
-```json
 {
   "name": "search_wandb_training_run",
   "description": "Retrieve a wandb training run",
@@ -29,17 +28,13 @@ SYSTEM: You are a helpful assistant who has access to the following function to 
     ]
   }
 }
-```
 USER: I'd like to retrieve information corresponding to my llama2 7b fine-tuning run which I created yesterday.
 ASSISTANT: <functioncall>
-```json
 {
     "model_name": "llama2 7b",
     "created_at": "2023-11-16 19:02:47.169823"
 }
-```
 FUNCTION RESPONSE:
-&#96;&#96;&#96;json
 {
     "model_id": "llama2-ft-522780665450614404",
     "created_at": "2023-11-15 12:13:30.169383",
@@ -47,7 +42,6 @@ FUNCTION RESPONSE:
     "loss": 1.12,
     ...
 }
-&#96;&#96;&#96;
 ASSISTANT: The model you are looking for has id `llama2-ft-522780665450614404`. It finished training yesterday at 4pm after completing 3.4 epochs...
 ```
 

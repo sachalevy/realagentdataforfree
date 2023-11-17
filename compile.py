@@ -88,11 +88,9 @@ def main(use_vision=False):
     scrolls_filepath = Path("data/scrolls.txt")
     clicks_filepath = Path("data/clicks.txt")
 
-    realtime_output = Path("data/realtime.txt")
-    realtime_fd = open(realtime_output, "a")
+    output_complete_samples = Path("data/complete_samples.jsonl")
+    output_complete_samples_fd = open(output_complete_samples, "a")
 
-    # iterate through all files
-    complete_samples, samples = [], []
     for i in range(len(screenshot_filenames) - 1):
         screenshot_filename = screenshot_filenames[i]
         start_ts, end_ts = screenshot_timestamps[i], screenshot_timestamps[i + 1]
@@ -113,12 +111,10 @@ def main(use_vision=False):
             user_input=" ".join(sentences),
             active_app=active_app,
         )
-        raw_action_description_completion, action_description = get_completion(
+        _, action_description = get_completion(
             prompt.SYSTEM_PROMPT_ACTION_DESCRIPTION,
             action_description_user_prompt,
-            request_json=True,
         )
-        print(action_description)
 
         api_signature_user_prompt = prompt.USER_PROMPT_API_SIGNATURE.format(
             action_description=action_description,
@@ -127,14 +123,13 @@ def main(use_vision=False):
             active_app=active_app,
         )
         if use_vision:
-            raw_api_signature_completion, api_signature = get_api_signature_from_vision(
+            _, api_signature = get_api_signature_from_vision(
                 screenshot_filepath, api_signature_user_prompt
             )
         else:
-            raw_api_signature_completion, api_signature = get_completion(
+            _, api_signature = get_completion(
                 prompt.SYSTEM_PROMPT_API_SIGNATURE_FROM_TEXT, api_signature_user_prompt
             )
-        print(api_signature)
 
         inferred_api_call_arguments_user_prompt = prompt.INFER_ARGS_USER_PROMPT.format(
             action_description=action_description,
@@ -143,21 +138,12 @@ def main(use_vision=False):
             active_app=active_app,
             api_signature=api_signature,
         )
-        print(inferred_api_call_arguments_user_prompt)
-        raw_arg_completion, inferred_args = get_completion(
-            prompt.INFER_ARGS_SYSTEM_PROMPT, inferred_api_call_arguments_user_prompt
+        _, inferred_args = get_completion(
+            prompt.INFER_ARGS_SYSTEM_PROMPT,
+            inferred_api_call_arguments_user_prompt,
+            request_json=True,
         )
-        print(inferred_args)
-
-        sample = prompt.SAMPLE_PROMPT.format(
-            api_signature=api_signature,
-            inferred_user_prompt=inferred_args.get("user_prompt"),
-            inferred_function_arguments=inferred_args.get("function_arguments"),
-            inferred_function_response=inferred_args.get("function_response"),
-            assistant_response=inferred_args.get("assistant_response"),
-        )
-        samples.append(sample)
-        realtime_fd.write(sample + "\n")
+        inferred_args = json.loads(inferred_args)
 
         complete_sample = {
             "screenshot_filepath": str(screenshot_filepath),
@@ -170,19 +156,12 @@ def main(use_vision=False):
             if isinstance(api_signature, dict)
             else api_signature,
             "user_input": " ".join(sentences),
-            "metadata": {
-                "raw_action_description_completion": raw_action_description_completion,
-                "raw_api_signature_completion": raw_api_signature_completion,
-                "keystrokes": keystrokes,
-                "scrolls": scrolls,
-                "clicks": clicks,
-            },
+            "inferred_args": inferred_args,
+            "keystrokes": keystrokes,
+            "scrolls": scrolls,
+            "clicks": clicks,
         }
-        complete_samples.append(complete_sample)
-
-    output_complete_samples = Path("data/complete_samples.json")
-    with open(output_complete_samples, "w") as file:
-        json.dump(complete_samples, file)
+        output_complete_samples_fd.write(json.dumps(complete_sample) + "\n")
 
 
 if __name__ == "__main__":
@@ -192,4 +171,5 @@ if __name__ == "__main__":
         action="store_true",
         help="Use vision model to extract api signature",
     )
-    main()
+    args = argparse.parse_args()
+    main(use_vision=args.use_vision)
