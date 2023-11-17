@@ -92,7 +92,7 @@ def main(screenshot_dir: Path, samples_filepath: Path, use_vision: bool = False)
 
     output_complete_samples_fd = open(samples_filepath, "a")
     samples = []
-    for i in range(1):
+    for i in range(len(screenshot_filenames) - 1):
         screenshot_filename = screenshot_filenames[i]
         start_ts, end_ts = screenshot_timestamps[i], screenshot_timestamps[i + 1]
 

@@ -3,6 +3,8 @@
 
 (i'm still working on the high-quality part)
 
+## Why?
+
 Think of the steps a data scientists goes through to answer a question about an ongoing training run:
 - receive a slack message (1)
 - navigate to wandb on their browser (2)
