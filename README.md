@@ -39,7 +39,7 @@ ASSISTANT: <functioncall>
 }
 ```
 FUNCTION RESPONSE:
-```json
+&#96;&#96;&#96;json
 {
     "model_id": "llama2-ft-522780665450614404",
     "created_at": "2023-11-15 12:13:30.169383",
@@ -47,7 +47,7 @@ FUNCTION RESPONSE:
     "loss": 1.12,
     ...
 }
-```
+&#96;&#96;&#96;
 ASSISTANT: The model you are looking for has id `llama2-ft-522780665450614404`. It finished training yesterday at 4pm after completing 3.4 epochs...
 ```
 
