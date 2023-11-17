@@ -1,11 +1,14 @@
 # datamakr
-Compile human-computer interaction datasets & convert them to text.
+**Facilitate the extraction of high-quality agent training data** from humans performing tasks on their computers.
 
-The goal is to **facilitate the extraction of high-quality agent training data** from humans performing tasks on their computers.
+Think of the steps a data scientists goes through to answer a question about an ongoing training run:
+- receive a slack message (1)
+- navigate to wandb on their browser (2)
+- search for the training run in question (3)
+- extract the relevant information (4)
+- answer on slack (5)
 
-For example, think of the steps a data scientists goes through to answer a question about an ongoing training run. They receive a slack message (1), navigate to wandb on their browser (2), search for the training run in question (3), extract the relevant information (4), and answer their colleague on slack (5).
-
-This can easily be described through text, given the necessary information (like screenshots and user activity recording). Inspired by OpenAI's function calls (for machines), we try to transcribe these workflows in an API-like format. For example for step 3:
+Inspired by OpenAI's function calls (for machines), we try to transcribe these workflows in an API-like format. For example for step 3:
 ```markdown
 SYSTEM: You are a helpful assistant who has access to the following function to help the user, which you can use if needed -
 {
@@ -82,4 +85,4 @@ python compile.py
 
 ## Other Features
 
-At first I thought a lot of this could be done without deep learning. I wrote some code to run edge detection on each screenshot and narrow down the text *in context* for the user (by looking at their mouse's position and finding the most-central window corresponding to this position).
+At first I thought a lot of this could be done without deep learning. I wrote some code to run edge detection on each screenshot and narrow down the text *in context* for the user (by looking at their mouse's position and finding the most-central window corresponding to this position). GPT-4-vision is really good at capturing what's going on in the screen, once costs come down, this could become a viable approach.
